@@ -47,6 +47,11 @@ jobs:
           unzip -q -o ~/godot/godot.zip -d ~/godot
           mkdir -p ~/.local/share/godot/export_templates/4.3.stable
           unzip -q -o ~/tmpl/tpz -d ~/.local/share/godot/export_templates/4.3.stable
+          # tpz kabhi 'templates/' subfolder me nikalta hai - use upar lao
+          if [ -d ~/.local/share/godot/export_templates/4.3.stable/templates ]; then
+            mv ~/.local/share/godot/export_templates/4.3.stable/templates/* ~/.local/share/godot/export_templates/4.3.stable/
+            rmdir ~/.local/share/godot/export_templates/4.3.stable/templates
+          fi
           ls ~/.local/share/godot/export_templates/4.3.stable | head
 
       - name: Godot binary taiyaar

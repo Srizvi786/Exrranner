@@ -50,7 +50,7 @@ func _build_world() -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.5, 0.55, 0.65)
 	env.ambient_light_energy = 0.9
-	env.tonemap_mode = Environment.TONE_MAP_FILMIC
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env_node.environment = env
 	add_child(env_node)
 
@@ -201,9 +201,9 @@ func _update_zone(delta: float) -> void:
 			zone_from = zone_radius
 			zone_to = float(ph["radius"])
 			# Naya center: purane circle ke andar kahin
-			var max_off := max(zone_from - zone_to, 0.0) * 0.6
+			var max_off: float = maxf(zone_from - zone_to, 0.0) * 0.6
 			var a := randf() * TAU
-			var off := randf() * max_off
+			var off: float = randf() * max_off
 			zone_center += Vector2(cos(a), sin(a)) * off
 	else:
 		var dur: float = float(ph["shrink"])
