@@ -64,14 +64,14 @@ jobs:
           chmod +x ~/godot/Godot_v4.3-stable_linux.x86_64
           ~/godot/Godot_v4.3-stable_linux.x86_64 --version
 
-      - name: Debug keystore (sign ke liye)
+      - name: Debug keystore (project ke andar, preset isi ko dekhta hai)
         run: |
-          mkdir -p ~/.android
-          if [ ! -f ~/.android/debug.keystore ]; then
-            keytool -genkey -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
+          if [ ! -f debug.keystore ]; then
+            keytool -genkey -v -keystore debug.keystore -alias androiddebugkey \
               -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US"
           fi
+          ls -lh debug.keystore
 
       - name: Godot import + Android export
         run: |
