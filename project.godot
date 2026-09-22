@@ -11,6 +11,11 @@ run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.3", "Mobile")
 config/icon="res://icon.svg"
 
+[autoload]
+
+Settings="*res://scripts/settings.gd"
+Sfx="*res://scripts/sfx.gd"
+
 [display]
 
 window/size/viewport_width=1280
