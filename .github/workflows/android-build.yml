@@ -81,7 +81,7 @@ jobs:
         run: |
           mkdir -p build
           ~/godot/Godot_v4.3-stable_linux.x86_64 --headless --import
-          ~/godot/Godot_v4.3-stable_linux.x86_64 --headless --export-release "Android" build/BattleArena.apk
+          ~/godot/Godot_v4.3-stable_linux.x86_64 --headless --export-debug "Android" build/BattleArena.apk
           ls -lh build/
 
       - name: APK upload (Artifacts)
