@@ -1,0 +1,83 @@
+name: Build BattleArena APK
+
+# Godot 4 game ka Android APK - free server par build, phone me kuch nahi chahiye
+on:
+  push:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.3-stable
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code checkout
+        uses: actions/checkout@v4
+
+      - name: JDK 17 setup (APK sign ke liye)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Android SDK packages
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Godot libs
+        run: sudo apt-get update && sudo apt-get install -y libx11-6 libxcursor1 libxrandr2 libxinerama1 libxi6 libgl1 libasound2t64 || true
+
+      - name: Cache Godot templates
+        id: tmpl-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/godot/export_templates/4.3.stable
+          key: godot-templates-4.3-stable
+
+      - name: Godot + templates download
+        if: steps.tmpl-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot ~/tmpl
+          curl -L -o ~/godot/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v4.3-stable_linux.x86_64.zip"
+          curl -L -o ~/tmpl/tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v4.3-stable_export_templates.tpz"
+          unzip -q -o ~/godot/godot.zip -d ~/godot
+          mkdir -p ~/.local/share/godot/export_templates/4.3.stable
+          unzip -q -o ~/tmpl/tpz -d ~/.local/share/godot/export_templates/4.3.stable
+          ls ~/.local/share/godot/export_templates/4.3.stable | head
+
+      - name: Godot binary taiyaar
+        run: |
+          if [ ! -f ~/godot/Godot_v4.3-stable_linux.x86_64 ]; then
+            mkdir -p ~/godot
+            curl -L -o ~/godot/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v4.3-stable_linux.x86_64.zip"
+            unzip -q -o ~/godot/godot.zip -d ~/godot
+          fi
+          chmod +x ~/godot/Godot_v4.3-stable_linux.x86_64
+          ~/godot/Godot_v4.3-stable_linux.x86_64 --version
+
+      - name: Debug keystore (sign ke liye)
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkey -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
+              -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Godot import + Android export
+        run: |
+          mkdir -p build
+          ~/godot/Godot_v4.3-stable_linux.x86_64 --headless --import
+          ~/godot/Godot_v4.3-stable_linux.x86_64 --headless --export-release "Android" build/BattleArena.apk
+          ls -lh build/
+
+      - name: APK upload (Artifacts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: BattleArena-apk
+          path: build/BattleArena.apk
+          retention-days: 90
