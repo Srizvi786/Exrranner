@@ -72,6 +72,10 @@ jobs:
               -dname "CN=Android Debug,O=Android,C=US"
           fi
           ls -lh debug.keystore
+          # Godot ko keystore ka poora (absolute) path chahiye
+          KS="$GITHUB_WORKSPACE/debug.keystore"
+          sed -i "s|^keystore/debug=.*|keystore/debug=\"$KS\"|" export_presets.cfg
+          grep "^keystore/debug" export_presets.cfg
 
       - name: Godot import + Android export
         run: |
