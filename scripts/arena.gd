@@ -44,6 +44,8 @@ var plane_t := 0.0
 var plane_from := Vector3(-95, 60, -55)
 var plane_to := Vector3(95, 60, 55)
 var plane_dur := 24.0
+var reminded_1 := false
+var reminded_2 := false
 var flight_cam: Camera3D
 var jumped := false
 
@@ -656,10 +658,19 @@ func _lamp(parent: Node, pos: Vector3, c: Color) -> MeshInstance3D:
 
 
 func _start_plane() -> void:
+	# Rasta har match me zone-center ke beech se (random angle)
+	var ang := randf() * TAU
+	var dir := Vector3(cos(ang), 0, sin(ang))
+	plane_from = Vector3(zone_center.x, 60, zone_center.y) - dir * 95.0
+	plane_to = Vector3(zone_center.x, 60, zone_center.y) + dir * 95.0
 	plane = Node3D.new()
 	plane.position = plane_from
+	plane.rotation.y = atan2(-dir.x, -dir.z) + PI
 	add_child(plane)
 	_build_c130()
+	# Default target = zone center (bina tap ke bhi zone me utroge)
+	set_land_target(zone_center, true)
+	toast("Zone me utarne ke liye JUMP dabao!")
 	flight_cam = Camera3D.new()
 	flight_cam.position = plane_from + Vector3(-18, 8, 0)
 	flight_cam.look_at(plane_from)
@@ -686,6 +697,14 @@ func _physics_process(delta: float) -> void:
 		player.global_position = plane.position + Vector3(0, -1, 0)
 		flight_cam.position = plane.position + Vector3(-20, 9, 0)
 		flight_cam.look_at(plane.position)
+		if k > 0.45 and not reminded_1:
+			reminded_1 = true
+			toast("Zone neeche hai - JUMP dabao!")
+			Sfx.play("warn")
+		if k > 0.75 and not reminded_2:
+			reminded_2 = true
+			toast("LAST CHANCE - JUMP!")
+			Sfx.play("warn")
 		if k >= 1.0 and not jumped:
 			player_jump()
 
@@ -744,7 +763,7 @@ func _process(delta: float) -> void:
 		hud.call("refresh", fighters.size(), _zone_text(), hpv, kl)
 
 
-func set_land_target(p: Vector2) -> void:
+func set_land_target(p: Vector2, quiet := false) -> void:
 	# Map ke andar clamp - bahar utarna namumkin
 	land_target = Vector2(clampf(p.x, -58.0, 58.0), clampf(p.y, -58.0, 58.0))
 	has_target = true
@@ -764,7 +783,8 @@ func set_land_target(p: Vector2) -> void:
 		add_child(beacon)
 	beacon.visible = true
 	beacon.position = Vector3(land_target.x, 45, land_target.y)
-	toast("Target lock! 🎯")
+	if not quiet:
+		toast("Target lock! 🎯")
 
 
 func _chute_fall(delta: float) -> void:
