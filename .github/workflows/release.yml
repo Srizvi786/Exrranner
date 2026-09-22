@@ -1,0 +1,96 @@
+name: Release AAB+APK (Play Store)
+
+# Hath se chalao: Actions > Release AAB+APK > Run workflow
+# Store wali signed build: APK (test) + AAB (Play upload)
+on:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.3-stable
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code checkout
+        uses: actions/checkout@v4
+
+      - name: JDK 17 setup
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Godot libs
+        run: sudo apt-get update && sudo apt-get install -y libx11-6 libxcursor1 libxrandr2 libxinerama1 libxi6 libgl1 libasound2t64 || true
+
+      - name: Cache Godot templates
+        id: tmpl-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/godot/export_templates/4.3.stable
+          key: godot-templates-4.3-stable
+
+      - name: Godot + templates
+        if: steps.tmpl-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot ~/tmpl
+          curl -L -o ~/godot/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v4.3-stable_linux.x86_64.zip"
+          curl -L -o ~/tmpl/tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v4.3-stable_export_templates.tpz"
+          unzip -q -o ~/godot/godot.zip -d ~/godot
+          mkdir -p ~/.local/share/godot/export_templates/4.3.stable
+          unzip -q -o ~/tmpl/tpz -d ~/.local/share/godot/export_templates/4.3.stable
+          if [ -d ~/.local/share/godot/export_templates/4.3.stable/templates ]; then
+            mv ~/.local/share/godot/export_templates/4.3.stable/templates/* ~/.local/share/godot/export_templates/4.3.stable/
+            rmdir ~/.local/share/godot/export_templates/4.3.stable/templates
+          fi
+
+      - name: Godot binary taiyaar
+        run: |
+          if [ ! -f ~/godot/Godot_v4.3-stable_linux.x86_64 ]; then
+            mkdir -p ~/godot
+            curl -L -o ~/godot/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v4.3-stable_linux.x86_64.zip"
+            unzip -q -o ~/godot/godot.zip -d ~/godot
+          fi
+          chmod +x ~/godot/Godot_v4.3-stable_linux.x86_64
+
+      - name: Release keystore (secret ya fresh)
+        run: |
+          if [ -n "${{ secrets.ANDROID_RELEASE_KEYSTORE }}" ]; then
+            echo "${{ secrets.ANDROID_RELEASE_KEYSTORE }}" | base64 -d > release.keystore
+            echo "Secret wala asli keystore use ho raha hai."
+          else
+            keytool -genkey -keystore release.keystore -alias battlearena \
+              -storepass BattleArena2026 -keypass BattleArena2026 -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=BattleArena, O=Srizvi, C=IN"
+            echo "WARNING: secret nahi mila - fresh keystore (sirf test ke liye, Store ke liye secret jodo)."
+          fi
+          KS="$GITHUB_WORKSPACE/release.keystore"
+          sed -i "s|^keystore/release=.*|keystore/release=\"$KS\"|" export_presets.cfg
+          sed -i "s|^keystore/release_user=.*|keystore/release_user=\"battlearena\"|" export_presets.cfg
+          sed -i "s|^keystore/release_password=.*|keystore/release_password=\"BattleArena2026\"|" export_presets.cfg
+          grep "^keystore/release" export_presets.cfg
+
+      - name: Signed APK export
+        run: |
+          mkdir -p build
+          ~/godot/Godot_v4.3-stable_linux.x86_64 --headless --import
+          ~/godot/Godot_v4.3-stable_linux.x86_64 --headless --export-release "Android" build/BattleArena-release.apk
+          ls -lh build/
+
+      - name: AAB export (Play Store)
+        run: |
+          ~/godot/Godot_v4.3-stable_linux.x86_64 --headless --export-release "Android" build/BattleArena-release.aab || echo "AAB_SKIP"
+          ls -lh build/
+
+      - name: Release files upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: BattleArena-release
+          path: build/BattleArena-release.*
+          retention-days: 90

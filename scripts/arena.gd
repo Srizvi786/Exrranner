@@ -41,16 +41,21 @@ var particles_on := true
 
 var plane: Node3D
 var plane_t := 0.0
-var plane_from := Vector3(-150, 60, -70)
-var plane_to := Vector3(150, 60, 70)
-var plane_dur := 22.0
+var plane_from := Vector3(-95, 60, -55)
+var plane_to := Vector3(95, 60, 55)
+var plane_dur := 24.0
 var flight_cam: Camera3D
 var jumped := false
 
 var chute: Node3D
+var land_target := Vector2.ZERO
+var has_target := false
+var beacon: MeshInstance3D
 var airdrop_pos := Vector3.ZERO
 var airdrop_active := false
 var airdrop_done := false
+var airdrop_crate := Vector3.ZERO
+var upgrade_t := 0.0
 var redzone := {"active": false, "center": Vector2.ZERO, "r": 15.0, "t": 0.0, "warn": true}
 var redzone_done := false
 var red_tick := 0.0
@@ -75,6 +80,8 @@ func _ready() -> void:
 	_build_sky()
 	_build_ground_roads()
 	_build_town()
+	_build_towers()
+	_build_bazaar()
 	_build_props()
 	_build_zone_visual()
 	_build_jeeps()
@@ -244,6 +251,156 @@ func _build_town() -> void:
 	var gp := Vector3(28, 0, -22)
 	_box(self, Vector3(14, 0.2, 11), Vector3(gp.x, 0.1, gp.z), _mat(Color(0.45, 0.45, 0.48)))
 	houses.append({"pos": Vector2(gp.x, gp.z), "size": Vector2(14, 11)})
+
+
+func _sign(text: String, pos: Vector3, size := 64) -> void:
+	var lab := Label3D.new()
+	lab.text = text
+	lab.font_size = size
+	lab.pixel_size = 0.01
+	lab.modulate = Color(1, 0.9, 0.4)
+	lab.outline_size = 10
+	lab.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lab.position = pos
+	add_child(lab)
+
+
+func _tower(pos: Vector3, floors := 4) -> void:
+	# Chaar-manzil tower: seedhi se chhat tak, chhat par sniper loot
+	var w := 10.0
+	var d := 9.0
+	var fh := 3.0
+	var t := 0.35
+	var wall_m := _mat(Color(0.62, 0.58, 0.5))
+	var slab_m := _mat(Color(0.5, 0.48, 0.44))
+	var rail_m := _mat(Color(0.3, 0.3, 0.34))
+	_box(self, Vector3(w + 1, 0.2, d + 1), Vector3(pos.x, 0.1, pos.z), slab_m)
+	_sign("TOWER", pos + Vector3(0, fh * floors + 1.2, 0))
+	for f in floors:
+		var y0 := 0.2 + f * fh
+		# Charon deewaren (ground floor me darwaza, upar khidki-slit)
+		for side in 4:
+			var horiz := side < 2
+			var off := (d / 2 if horiz else w / 2) * (1.0 if side % 2 == 0 else -1.0)
+			var len := w if horiz else d
+			var px := pos.x + (0.0 if horiz else off)
+			var pz := pos.z + (off if horiz else 0.0)
+			if f == 0 and ((horiz and side == 1) or (not horiz and side == 2)):
+				# Darwaza wali deewar: gap
+				var door := 1.8
+				var seg := (len - door) / 2.0
+				var cx := px + (0.0 if horiz else 0.0)
+				if horiz:
+					_box(self, Vector3(seg, fh, t), Vector3(cx - door / 2 - seg / 2, y0 + fh / 2, pz), wall_m)
+					_box(self, Vector3(seg, fh, t), Vector3(cx + door / 2 + seg / 2, y0 + fh / 2, pz), wall_m)
+					_box(self, Vector3(door, fh - 2.2, t), Vector3(cx, y0 + 2.2 + (fh - 2.2) / 2, pz), wall_m)
+				else:
+					_box(self, Vector3(t, fh, seg), Vector3(px, y0 + fh / 2, pz - door / 2 - seg / 2), wall_m)
+					_box(self, Vector3(t, fh, seg), Vector3(px, y0 + fh / 2, pz + door / 2 + seg / 2), wall_m)
+					_box(self, Vector3(t, fh - 2.2, door), Vector3(px, y0 + 2.2 + (fh - 2.2) / 2, pz), wall_m)
+			else:
+				# Khidki-slit wali deewar: neeche + upar patti
+				if horiz:
+					_box(self, Vector3(len, 1.1, t), Vector3(px, y0 + 0.55, pz), wall_m)
+					_box(self, Vector3(len, fh - 2.1, t), Vector3(px, y0 + 2.1 + (fh - 2.1) / 2, pz), wall_m)
+				else:
+					_box(self, Vector3(t, 1.1, len), Vector3(px, y0 + 0.55, pz), wall_m)
+					_box(self, Vector3(t, fh - 2.1, len), Vector3(px, y0 + 2.1 + (fh - 2.1) / 2, pz), wall_m)
+		# Slab - seedhi-gap (x me) ke saath, agle floor ka farsh
+		if f < floors - 1:
+			_box(self, Vector3(4.2, 0.25, d), Vector3(pos.x + 2.9, y0 + fh, pos.z), slab_m)
+		# Seedhi X-disha me: 10 steps, 0.3 rise (chadhne layak)
+		for s in 10:
+			_box(self, Vector3(0.45, 0.28, 1.8), Vector3(pos.x - 4.2 + s * 0.45, y0 + 0.3 + s * 0.3, pos.z + d / 2 - 1.2), slab_m)
+	# Chhat: parapet + loot + tanki (seedhi-gap par mumty cover)
+	var ry := 0.2 + floors * fh
+	_box(self, Vector3(4.5, 0.25, d + 0.6), Vector3(pos.x + 3.05, ry, pos.z), slab_m)
+	_box(self, Vector3(0.25, 2.2, 3.0), Vector3(pos.x - 4.9, ry + 1.1, pos.z), rail_m)
+	_box(self, Vector3(0.25, 2.2, 3.0), Vector3(pos.x + 0.7, ry + 1.1, pos.z), rail_m)
+	_box(self, Vector3(5.9, 2.2, 0.25), Vector3(pos.x - 2.1, ry + 1.1, pos.z - 1.5), rail_m)
+	_box(self, Vector3(5.9, 0.25, 3.2), Vector3(pos.x - 2.1, ry + 2.3, pos.z), slab_m)
+	for side in 4:
+		var horiz2 := side < 2
+		var off2 := ((d + 0.6) / 2 if horiz2 else (w + 0.6) / 2) * (1.0 if side % 2 == 0 else -1.0)
+		if horiz2:
+			_box(self, Vector3(w + 0.6, 1.2, 0.3), Vector3(pos.x, ry + 0.7, pos.z + off2), rail_m)
+		else:
+			_box(self, Vector3(0.3, 1.2, d + 0.6), Vector3(pos.x + off2, ry + 0.7, pos.z), rail_m)
+	# Tanki
+	var tank := MeshInstance3D.new()
+	var tc := CylinderMesh.new()
+	tc.top_radius = 1.0
+	tc.bottom_radius = 1.0
+	tc.height = 1.6
+	tank.mesh = tc
+	tank.material_override = _mat(Color(0.2, 0.3, 0.5))
+	tank.position = pos + Vector3(w / 2 - 1.5, ry + 1.6, -d / 2 + 1.5)
+	add_child(tank)
+	spawn_pickup("sniper", pos + Vector3(0, ry + 0.4, 0), 0)
+	spawn_pickup("medkit", pos + Vector3(2, ry + 0.4, 1), 0)
+	houses.append({"pos": Vector2(pos.x, pos.z), "size": Vector2(w + 1, d + 1), "col": Color(0.85, 0.7, 0.3)})
+
+
+func _build_towers() -> void:
+	_tower(Vector3(-22, 0, -38), 4)
+	_tower(Vector3(26, 0, 38), 4)
+
+
+func _shop(pos: Vector3, yaw: float, name: String, glass_c: Color) -> void:
+	var root := Node3D.new()
+	root.position = pos
+	root.rotation.y = yaw
+	add_child(root)
+	var wall_m := _mat(Color(0.7, 0.65, 0.55))
+	var glass := StandardMaterial3D.new()
+	glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glass.albedo_color = Color(glass_c.r, glass_c.g, glass_c.b, 0.4)
+	glass.metallic = 0.4
+	glass.roughness = 0.1
+	_box(root, Vector3(7, 0.2, 6), Vector3(0, 0.1, 0), _mat(Color(0.5, 0.48, 0.44)))
+	_box(root, Vector3(7.4, 0.3, 6.4), Vector3(0, 3.65, 0), _mat(Color(0.45, 0.2, 0.15)))
+	# Peeche + side deewaren
+	_box(root, Vector3(7, 3.5, 0.3), Vector3(0, 1.75, 3), wall_m)
+	_box(root, Vector3(0.3, 3.5, 6), Vector3(-3.5, 1.75, 0), wall_m)
+	_box(root, Vector3(0.3, 3.5, 6), Vector3(3.5, 1.75, 0), wall_m)
+	# Saamne kaanch + khula hissa
+	_box(root, Vector3(2.2, 3.5, 0.2), Vector3(-2.4, 1.75, -3), wall_m)
+	_box(root, Vector3(2.2, 3.5, 0.2), Vector3(2.4, 1.75, -3), wall_m)
+	var gl := MeshInstance3D.new()
+	var gb := BoxMesh.new()
+	gb.size = Vector3(2.6, 2.0, 0.15)
+	gl.mesh = gb
+	gl.material_override = glass
+	gl.position = Vector3(0, 2.2, -3)
+	root.add_child(gl)
+	_sign(name, pos + Vector3(0, 4.6, 0))
+	houses.append({"pos": Vector2(pos.x, pos.z), "size": Vector2(7.4, 6.4)})
+
+
+func _build_bazaar() -> void:
+	_shop(Vector3(-12, 0, 46), 3.14, "DUKAAN", Color(0.4, 0.7, 1.0))
+	_shop(Vector3(-4, 0, 46), 3.14, "CHAI", Color(1.0, 0.7, 0.3))
+	_shop(Vector3(4, 0, 46), 3.14, "MOBILE", Color(0.4, 1.0, 0.5))
+	_shop(Vector3(12, 0, 46), 3.14, "KAPDE", Color(1.0, 0.4, 0.6))
+	# Hospital (khokhla - andar ghus sakte ho, dawai milegi)
+	var hp := Vector3(-40, 0, -38)
+	var hwall := _mat(Color(0.92, 0.92, 0.9))
+	_box(self, Vector3(12.4, 0.2, 8.4), Vector3(hp.x, 0.1, hp.z - 1), _mat(Color(0.6, 0.6, 0.58)))
+	_box(self, Vector3(12.4, 0.3, 8.4), Vector3(hp.x, 3.65, hp.z - 1), _mat(Color(0.7, 0.15, 0.15)))
+	_box(self, Vector3(12, 3.5, 0.3), Vector3(hp.x, 1.75, hp.z + 2.85), hwall)
+	_box(self, Vector3(0.3, 3.5, 8), Vector3(hp.x - 6, 1.75, hp.z - 1), hwall)
+	_box(self, Vector3(0.3, 3.5, 8), Vector3(hp.x + 6, 1.75, hp.z - 1), hwall)
+	_box(self, Vector3(4.5, 3.5, 0.3), Vector3(hp.x - 3.75, 1.75, hp.z - 4.85), hwall)
+	_box(self, Vector3(4.5, 3.5, 0.3), Vector3(hp.x + 3.75, 1.75, hp.z - 4.85), hwall)
+	_box(self, Vector3(3.0, 1.1, 0.3), Vector3(hp.x, 2.95, hp.z - 4.85), hwall)
+	var cross_m := _mat(Color(0.85, 0.1, 0.1))
+	_box(self, Vector3(1.6, 0.5, 0.2), Vector3(hp.x, 2.6, hp.z - 5.1), cross_m)
+	_box(self, Vector3(0.5, 1.6, 0.2), Vector3(hp.x, 2.6, hp.z - 5.1), cross_m)
+	_sign("HOSPITAL", hp + Vector3(0, 4.8, 0))
+	spawn_pickup("medkit", hp + Vector3(-2, 0.4, 0), 0)
+	spawn_pickup("medkit", hp + Vector3(2, 0.4, 0), 0)
+	spawn_pickup("bandage", hp + Vector3(0, 0.4, 1), 0)
+	houses.append({"pos": Vector2(hp.x, hp.z - 1), "size": Vector2(12.4, 8.4), "col": Color(1, 1, 1)})
 
 
 func _build_props() -> void:
@@ -416,6 +573,8 @@ func _spawn_fighters() -> void:
 			f.aim_yaw = randf() * TAU
 		f.position = pos
 		f.set_physics_process(false)  # plane phase tak shaant
+		f.think_cd = randf() * 0.25  # sab ek frame me na sochen (perf)
+		f.wander_cd = randf() * 3.0
 		add_child(f)
 		f.died.connect(_on_fighter_died)
 		fighters.append(f)
@@ -423,14 +582,84 @@ func _spawn_fighters() -> void:
 
 # ---------- PLANE + PARACHUTE ----------
 
+var props: Array = []
+var nav_red: MeshInstance3D
+var nav_green: MeshInstance3D
+var blink_t := 0.0
+
+
+func _build_c130() -> void:
+	# PUBG-style C-130 cargo plane: camo, 4 ghumte propeller, khula ramp
+	var camo := _mat(Color(0.32, 0.38, 0.25), 0.6)
+	var camo_d := _mat(Color(0.22, 0.28, 0.18), 0.6)
+	var dark := _mat(Color(0.1, 0.11, 0.12), 0.5)
+	var glass := StandardMaterial3D.new()
+	glass.albedo_color = Color(0.08, 0.14, 0.2)
+	glass.metallic = 0.7
+	glass.roughness = 0.15
+	_box(plane, Vector3(4, 3.6, 20), Vector3.ZERO, camo, false)
+	_box(plane, Vector3(3.4, 2.8, 3), Vector3(0, -0.2, -11), camo, false)
+	_box(plane, Vector3(3.0, 1.2, 1.2), Vector3(0, 0.9, -11.2), glass, false)
+	_box(plane, Vector3(4.2, 1.0, 6), Vector3(0, -0.6, 4), camo_d, false)
+	# Khula pichhla ramp (yahi se koodoge!)
+	_box(plane, Vector3(3.2, 0.3, 4), Vector3(0, -1.9, 11.5), dark, false)
+	_box(plane, Vector3(3.6, 2.6, 0.4), Vector3(0, 0.6, 9.8), camo, false)
+	# Pankh + poonchh
+	_box(plane, Vector3(28, 0.5, 4), Vector3(0, 1.2, -1), camo, false)
+	_box(plane, Vector3(0.5, 5, 3.5), Vector3(0, 3.5, 9), camo, false)
+	_box(plane, Vector3(10, 0.4, 2.5), Vector3(0, 2.2, 9.2), camo, false)
+	# 4 engine + ghumte propeller
+	for x in [-10.5, -4.5, 4.5, 10.5]:
+		var nac := MeshInstance3D.new()
+		var nc := CylinderMesh.new()
+		nc.top_radius = 0.7
+		nc.bottom_radius = 0.7
+		nc.height = 3.0
+		nac.mesh = nc
+		nac.material_override = camo_d
+		nac.rotation.x = PI / 2.0
+		nac.position = Vector3(x, 0.6, -2.2)
+		plane.add_child(nac)
+		var pivot := Node3D.new()
+		pivot.position = Vector3(x, 0.6, -3.9)
+		plane.add_child(pivot)
+		var blade_m := _mat(Color(0.12, 0.12, 0.13), 0.4)
+		for a in [0.0, PI / 2.0]:
+			var bl := MeshInstance3D.new()
+			var bb := BoxMesh.new()
+			bb.size = Vector3(0.35, 4.2, 0.12)
+			bl.mesh = bb
+			bl.material_override = blade_m
+			bl.rotation.z = a
+			pivot.add_child(bl)
+		props.append(pivot)
+	nav_red = _lamp(plane, Vector3(-14.2, 1.2, -1), Color(1, 0.1, 0.1))
+	nav_green = _lamp(plane, Vector3(14.2, 1.2, -1), Color(0.1, 1, 0.2))
+
+
+func _lamp(parent: Node, pos: Vector3, c: Color) -> MeshInstance3D:
+	var l := MeshInstance3D.new()
+	var s := SphereMesh.new()
+	s.radius = 0.25
+	s.height = 0.5
+	l.mesh = s
+	var m := StandardMaterial3D.new()
+	m.albedo_color = c
+	m.emission_enabled = true
+	m.emission = c
+	m.emission_energy_multiplier = 5.0
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	l.material_override = m
+	l.position = pos
+	parent.add_child(l)
+	return l
+
+
 func _start_plane() -> void:
 	plane = Node3D.new()
 	plane.position = plane_from
 	add_child(plane)
-	var gray := _mat(Color(0.55, 0.57, 0.6), 0.5)
-	_box(plane, Vector3(3, 3, 22), Vector3.ZERO, gray, false)
-	_box(plane, Vector3(20, 0.4, 3.5), Vector3(0, 0.5, 0), gray, false)
-	_box(plane, Vector3(0.4, 4, 3), Vector3(0, 2, 10), gray, false)
+	_build_c130()
 	flight_cam = Camera3D.new()
 	flight_cam.position = plane_from + Vector3(-18, 8, 0)
 	flight_cam.look_at(plane_from)
@@ -446,6 +675,14 @@ func _physics_process(delta: float) -> void:
 		plane_t += delta
 		var k: float = clampf(plane_t / plane_dur, 0.0, 1.0)
 		plane.position = plane_from.lerp(plane_to, k)
+		for pr in props:
+			(pr as Node3D).rotation.z += delta * 25.0
+		blink_t += delta
+		var bl := sin(blink_t * 6.0) > 0.0
+		if nav_red != null:
+			nav_red.visible = bl
+		if nav_green != null:
+			nav_green.visible = not bl
 		player.global_position = plane.position + Vector3(0, -1, 0)
 		flight_cam.position = plane.position + Vector3(-20, 9, 0)
 		flight_cam.look_at(plane.position)
@@ -496,6 +733,7 @@ func _process(delta: float) -> void:
 	_zone_damage(delta)
 	_update_events(delta)
 	_update_sunset()
+	_check_looter_upgrade(delta)
 	if hud != null:
 		var hpv := 0.0
 		var kl := 0
@@ -506,6 +744,29 @@ func _process(delta: float) -> void:
 		hud.call("refresh", fighters.size(), _zone_text(), hpv, kl)
 
 
+func set_land_target(p: Vector2) -> void:
+	# Map ke andar clamp - bahar utarna namumkin
+	land_target = Vector2(clampf(p.x, -58.0, 58.0), clampf(p.y, -58.0, 58.0))
+	has_target = true
+	if beacon == null:
+		beacon = MeshInstance3D.new()
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 1.2
+		cyl.bottom_radius = 1.2
+		cyl.height = 90.0
+		beacon.mesh = cyl
+		var bm := StandardMaterial3D.new()
+		bm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		bm.albedo_color = Color(1, 0.85, 0.2, 0.35)
+		bm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		bm.cull_mode = BaseMaterial3D.CULL_DISABLED
+		beacon.material_override = bm
+		add_child(beacon)
+	beacon.visible = true
+	beacon.position = Vector3(land_target.x, 45, land_target.y)
+	toast("Target lock! 🎯")
+
+
 func _chute_fall(delta: float) -> void:
 	if player == null or not player.alive:
 		return
@@ -513,17 +774,37 @@ func _chute_fall(delta: float) -> void:
 	var wdir: Vector3 = Basis(Vector3.UP, player.aim_yaw) * steer
 	player.global_position += (wdir * 8.0 + Vector3(0, -6.0, 0)) * delta
 	player.rotation.y = player.aim_yaw
-	if player.global_position.y <= 1.0:
-		player.global_position.y = 1.0
+	# Bahar jaana band - clamp
+	player.global_position.x = clampf(player.global_position.x, -58.0, 58.0)
+	player.global_position.z = clampf(player.global_position.z, -58.0, 58.0)
+	# Neeche raycast - chhat par bhi land hoga, andar nahi dhasega
+	var from: Vector3 = player.global_position + Vector3(0, 1.0, 0)
+	var q := PhysicsRayQueryParameters3D.create(from, from + Vector3(0, -8, 0), 1, [player.get_rid()])
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(q)
+	var landed := false
+	if not hit.is_empty():
+		var gy: float = (hit["position"] as Vector3).y
+		if player.global_position.y - gy <= 0.25:
+			player.global_position.y = gy + 0.05
+			landed = true
+	elif player.global_position.y <= 0.15:
+		player.global_position.y = 0.1
+		landed = true
+	if landed:
 		if chute != null:
 			chute.queue_free()
 			chute = null
+		if beacon != null:
+			beacon.visible = false
+		has_target = false
 		player.set_physics_process(true)
 		player.velocity = Vector3.ZERO
 		state = "play"
 		for f in fighters:
 			if f != player:
 				(f as Fighter).set_physics_process(true)
+		puff(player.global_position + Vector3(0, 0.5, 0))
+		Sfx.play("thud")
 		toast("Land ho gaye! Lado!")
 		Sfx.play("warn")
 
@@ -604,6 +885,7 @@ func _start_airdrop() -> void:
 	airdrop_done = true
 	var p := Vector3(zone_center.x + randf_range(-8, 8), 0, zone_center.y + randf_range(-8, 8))
 	airdrop_pos = p
+	airdrop_crate = p
 	airdrop_active = true
 	# Peti parachute se utarti hai
 	var crate := Node3D.new()
@@ -647,6 +929,21 @@ func _update_events(delta: float) -> void:
 			explode(p, 38.0, 4.5, null)
 		if float(redzone["t"]) <= 0.0:
 			redzone["active"] = false
+
+
+func _check_looter_upgrade(delta: float) -> void:
+	upgrade_t -= delta
+	if upgrade_t > 0.0:
+		return
+	upgrade_t = 1.0
+	if airdrop_crate == Vector3.ZERO:
+		return
+	for f in fighters:
+		var b := f as Fighter
+		if b != null and b.alive and not b.is_player and b.personality == 2 and not b.looted_upgrade:
+			if b.global_position.distance_to(airdrop_crate) < 5.0:
+				b.equip_bot_sniper()
+				toast(b.fname + " ne SNIPER uthayi!")
 
 
 func _update_sunset() -> void:
@@ -803,6 +1100,11 @@ func killfeed(killer: String, victim: String) -> void:
 
 func _on_fighter_died(f: Fighter) -> void:
 	fighters.erase(f)
+	# Jeep me mare to seat khali + engine band (atakna fix)
+	if f.driving != null:
+		(f.driving as Jeep).driver = null
+		Sfx.engine_stop()
+		f.driving = null
 	# Mara hua apni gun gira jata hai
 	spawn_pickup(f.gun, f.global_position, 0)
 	spawn_pickup("ammo", f.global_position + Vector3(1, 0, 0), 0)

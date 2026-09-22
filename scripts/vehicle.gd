@@ -176,3 +176,8 @@ func take_damage(amount: float, _from = null) -> void:
 		if arena != null and arena.has_method("explode"):
 			arena.explode(global_position + Vector3(0, 1, 0), 40.0, 4.0, null)
 		exit_driver(30.0)
+
+
+func honk() -> void:
+	if not dead:
+		Sfx.play("horn")

@@ -30,6 +30,7 @@ var reload_btn: Button
 var crouch_btn: Button
 var nade_btn: Button
 var drive_btn: Button
+var horn_btn: Button
 var plane_btn: Button
 var med_btn: Button
 var band_btn: Button
@@ -78,6 +79,10 @@ class Minimap extends Control:
 		if arena_ref.airdrop_active:
 			var ap := arena_ref.airdrop_pos
 			draw_circle(w2m.call(Vector2(ap.x, ap.z)), 5.0, Color(1, 0.9, 0.2))
+		# Landing target flag
+		if bool(arena_ref.get("has_target")):
+			var tp2: Vector2 = arena_ref.get("land_target")
+			draw_circle(w2m.call(tp2), 6.0, Color(1, 0.85, 0.2))
 		# Jeeps
 		for j in arena_ref.jeeps:
 			if not (j as Jeep).dead:
@@ -173,7 +178,8 @@ func _build_minimap() -> void:
 	mmap.custom_minimum_size = Vector2(230, 230)
 	mmap.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	mmap.position = Vector2(-242, 10)
-	mmap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mmap.mouse_filter = Control.MOUSE_FILTER_STOP
+	mmap.gui_input.connect(_on_mmap_tap)
 	add_child(mmap)
 
 
@@ -326,6 +332,14 @@ func _build_buttons() -> void:
 	drive_btn.visible = false
 	drive_btn.pressed.connect(_on_drive)
 	add_child(drive_btn)
+	horn_btn = _small_btn("HORN")
+	horn_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	horn_btn.position = Vector2(120, -260)
+	horn_btn.visible = false
+	horn_btn.pressed.connect(func() -> void:
+		if player != null and player.driving != null:
+			player.driving.honk())
+	add_child(horn_btn)
 	plane_btn = Button.new()
 	plane_btn.text = "🪂 TAP TO JUMP!"
 	plane_btn.add_theme_font_size_override("font_size", 40)
@@ -446,6 +460,13 @@ func _process(delta: float) -> void:
 	var deg := posmod(int(round(-rad_to_deg(player.aim_yaw))), 360)
 	var dirs := ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 	compass_label.text = "%s %d°" % [dirs[int(fposmod(deg + 22.5, 360.0) / 45.0) % 8], deg]
+	if arena != null and str(arena.get("state")) == "chute" and player != null:
+		if bool(arena.get("has_target")):
+			var tp: Vector2 = arena.get("land_target")
+			var dd := Vector2(player.global_position.x, player.global_position.z).distance_to(tp)
+			msg_label.text = "🎯 %dm" % int(dd)
+		else:
+			msg_label.text = "Minimap par tap = landing!"
 	ammo_label.text = "%d/%d" % [player.ammo_mag, player.ammo_reserve]
 	gun_label.text = "%s%s" % [player.gun.to_upper(), " +MAG" if player.ext_mag else ""]
 	nade_btn.text = "BMB %d" % player.grenades
@@ -471,8 +492,10 @@ func _process(delta: float) -> void:
 	elif player != null and player.driving != null:
 		drive_btn.visible = true
 		drive_btn.text = "EXIT"
+		horn_btn.visible = true
 	else:
 		drive_btn.visible = false
+		horn_btn.visible = false
 	# Minimap throttle
 	mmap_t -= delta
 	if mmap_t <= 0.0:
@@ -523,6 +546,8 @@ func show_end(won: bool, rank: int, kills: int) -> void:
 		end_title.add_theme_color_override("font_color", Color(1, 0.4, 0.35))
 	var st: Dictionary = Settings.stats
 	end_stats.text = "Kills: %d   Wins: %d/%d   Best: #%d" % [kills, st["wins"], st["matches"], st["best_rank"]]
+	if won and player != null and player.alive:
+		player.start_dance()
 
 
 # ---------- buttons ----------
@@ -583,6 +608,23 @@ func _on_drive() -> void:
 			j.enter(player)
 
 
+func _mmap_rect() -> Rect2:
+	return Rect2(mmap.global_position, mmap.size)
+
+
+func _on_mmap_tap(event: InputEvent) -> void:
+	if arena == null:
+		return
+	var st: String = str(arena.get("state"))
+	if st != "plane" and st != "chute":
+		return
+	if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
+		var lp: Vector2 = (event as InputEventScreenTouch).position
+		var wx := lp.x / mmap.size.x * 130.0 - 65.0
+		var wz := lp.y / mmap.size.y * 130.0 - 65.0
+		arena.set_land_target(Vector2(wx, wz))
+
+
 func _fire_rect() -> Rect2:
 	return Rect2(fire_btn.global_position, fire_btn.size)
 
@@ -601,7 +643,7 @@ func _input(event: InputEvent) -> void:
 				stick_knob.visible = true
 				stick_base.position = t.position - Vector2(110, 110)
 				stick_knob.position = t.position - Vector2(50, 50)
-			elif t.position.x >= vp.x * 0.45 and look_touch == -1 and not _fire_rect().has_point(t.position):
+			elif t.position.x >= vp.x * 0.45 and look_touch == -1 and not _fire_rect().has_point(t.position) and not _mmap_rect().has_point(t.position):
 				look_touch = t.index
 				look_last = t.position
 		else:

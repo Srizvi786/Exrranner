@@ -28,6 +28,8 @@ func _ready() -> void:
 	bank["ui"] = _tone(600.0, 0.06, 0.4)
 	bank["warn"] = _tone(520.0, 0.25, 0.6)
 	bank["chute"] = _noise(0.9, 0.35)
+	bank["thud"] = _tone(110.0, 0.25, 0.9)
+	bank["horn"] = _dual(400.0, 520.0, 0.45)
 
 
 func _bytes(samples: PackedFloat32Array) -> AudioStreamWAV:
@@ -50,6 +52,16 @@ func _tone(freq: float, dur: float, vol: float) -> AudioStreamWAV:
 	for i in n:
 		var k := float(i) / float(n)
 		s[i] = sin(TAU * freq * float(i) / RATE) * vol * (1.0 - k)
+	return _bytes(s)
+
+
+func _dual(f1: float, f2: float, dur: float) -> AudioStreamWAV:
+	var n := int(RATE * dur)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	for i in n:
+		var k := float(i) / float(n)
+		s[i] = (sin(TAU * f1 * float(i) / RATE) + sin(TAU * f2 * float(i) / RATE)) * 0.3 * (1.0 - k * 0.5)
 	return _bytes(s)
 
 

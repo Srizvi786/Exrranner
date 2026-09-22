@@ -80,6 +80,10 @@ var wander_cd := 0.0
 var burst_cd := 0.0
 var strafe_sign := 1.0
 var nade_cd := 8.0
+var stuck_t := 0.0
+var stuck_pos := Vector3.ZERO
+var dancing := false
+var looted_upgrade := false
 
 
 func mag_size() -> int:
@@ -88,6 +92,7 @@ func mag_size() -> int:
 
 func _ready() -> void:
 	add_to_group("fighters")
+	floor_snap_length = 0.45  # seedhi chadhne ke liye
 	_build_humanoid()
 	if is_player:
 		_setup_camera()
@@ -518,6 +523,33 @@ func _die_fall() -> void:
 	tw.tween_callback(queue_free)
 
 
+func start_dance() -> void:
+	if not alive or dancing:
+		return
+	dancing = true
+	move_input = Vector2.ZERO
+	fire_held = false
+	arm_l.rotation.x = -2.6
+	arm_r.rotation.x = -2.6
+	var tw := create_tween()
+	tw.set_loops()
+	tw.tween_property(visual, "position:y", 0.35, 0.3)
+	tw.tween_property(visual, "position:y", 0.0, 0.3)
+	tw.parallel().tween_property(self, "rotation:y", rotation.y + TAU, 1.2)
+
+
+func equip_bot_sniper() -> void:
+	if looted_upgrade:
+		return
+	looted_upgrade = true
+	gun = "sniper"
+	ammo_mag = 5
+	ammo_reserve = 25
+	vest = true
+	vest_hp = 50.0
+	vest_m.visible = true
+
+
 func _flash_hit() -> void:
 	if body_mat == null:
 		return
@@ -564,6 +596,18 @@ func _bot_think(delta: float) -> void:
 	if think_cd > 0.0:
 		return
 	think_cd = 0.25
+	# Stuck sensor: hilne ki koshish par jagah na badle to ghoomo
+	if move_input.length() > 0.1:
+		stuck_t += 0.25
+		if stuck_t > 2.0:
+			stuck_t = 0.0
+			stuck_pos = global_position
+			aim_yaw += 2.4
+			strafe_sign = -strafe_sign
+			wander_cd = 0.0
+	else:
+		stuck_t = 0.0
+		stuck_pos = global_position
 	var arena := get_tree().current_scene
 	var live := true
 	if arena != null and arena.has_method("is_live"):
