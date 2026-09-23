@@ -77,6 +77,11 @@ jobs:
           sed -i "s|^keystore/debug=.*|keystore/debug=\"$KS\"|" export_presets.cfg
           grep "^keystore/debug" export_presets.cfg
 
+      - name: Godot import + script check (error hua to fail)
+        run: |
+          ~/godot/Godot_v4.3-stable_linux.x86_64 --headless --import 2>&1 | tee import.log
+          if grep -q "SCRIPT ERROR" import.log; then echo "GDScript errors mile!"; exit 1; fi
+
       - name: Godot import + Android export
         run: |
           mkdir -p build

@@ -77,7 +77,7 @@ class Minimap extends Control:
 		draw_arc(w2m.call(zc), arena_ref.zone_radius / 130.0 * s, 0, TAU, 48, Color(0.35, 0.75, 1), 3.0)
 		# Air-drop
 		if arena_ref.airdrop_active:
-			var ap := arena_ref.airdrop_pos
+			var ap: Vector3 = arena_ref.airdrop_pos
 			draw_circle(w2m.call(Vector2(ap.x, ap.z)), 5.0, Color(1, 0.9, 0.2))
 		# Landing target flag
 		if bool(arena_ref.get("has_target")):
@@ -508,6 +508,13 @@ func _update_plane_ui() -> void:
 		plane_btn.visible = true
 	else:
 		plane_btn.visible = false
+
+
+func set_plane_hint(over: bool) -> void:
+	if over:
+		msg_label.text = "🟢 ZONE NICHE HAI - JUMP DABAO!"
+	else:
+		msg_label.text = "⏳ Zone ka intezar karo..."
 
 
 func toast(msg: String) -> void:

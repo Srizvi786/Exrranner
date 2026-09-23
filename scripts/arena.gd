@@ -64,6 +64,7 @@ var red_tick := 0.0
 
 var sun: DirectionalLight3D
 var env: Environment
+var sky_mat: ProceduralSkyMaterial
 
 const LOCATIONS := [
 	{"n": "Milta Town", "p": Vector2(0, 0)},
@@ -143,14 +144,50 @@ func _build_sky() -> void:
 	add_child(sun)
 	var env_node := WorldEnvironment.new()
 	env = Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.35, 0.55, 0.8)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.55, 0.6, 0.7)
-	env.ambient_light_energy = 0.9
+	var sky := Sky.new()
+	sky_mat = ProceduralSkyMaterial.new()
+	sky_mat.sky_top_color = Color(0.25, 0.5, 0.85)
+	sky_mat.sky_horizon_color = Color(0.7, 0.85, 0.95)
+	sky_mat.ground_bottom_color = Color(0.2, 0.25, 0.2)
+	sky_mat.ground_horizon_color = Color(0.7, 0.8, 0.85)
+	sky_mat.sun_angle_max = 12.0
+	sky.sky_material = sky_mat
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	env.ambient_light_energy = 0.7
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.fog_enabled = true
+	env.fog_light_color = Color(0.7, 0.8, 0.9)
+	env.fog_density = 0.004
 	env_node.environment = env
 	add_child(env_node)
+	# Door pahad (void chhupao) + badal
+	var mtn_m := _mat(Color(0.3, 0.38, 0.3))
+	for i in 10:
+		var a := TAU * i / 10.0
+		var mtn := MeshInstance3D.new()
+		var cone := CylinderMesh.new()
+		cone.top_radius = 2.0
+		cone.bottom_radius = randf_range(14.0, 22.0)
+		cone.height = randf_range(25.0, 40.0)
+		mtn.mesh = cone
+		mtn.material_override = mtn_m
+		mtn.position = Vector3(cos(a) * 105.0, 8.0, sin(a) * 105.0)
+		add_child(mtn)
+	var cloud_m := StandardMaterial3D.new()
+	cloud_m.albedo_color = Color(1, 1, 1)
+	cloud_m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	for i in 8:
+		var cl := MeshInstance3D.new()
+		var cs := SphereMesh.new()
+		cs.radius = 1.0
+		cs.height = 1.0
+		cl.mesh = cs
+		cl.material_override = cloud_m
+		cl.scale = Vector3(randf_range(8, 14), randf_range(1.5, 2.5), randf_range(4, 7))
+		cl.position = Vector3(randf_range(-90, 90), randf_range(55, 75), randf_range(-90, 90))
+		add_child(cl)
 
 
 func _build_ground_roads() -> void:
@@ -697,6 +734,9 @@ func _physics_process(delta: float) -> void:
 		player.global_position = plane.position + Vector3(0, -1, 0)
 		flight_cam.position = plane.position + Vector3(-20, 9, 0)
 		flight_cam.look_at(plane.position)
+		if hud != null:
+			var over := Vector2(plane.position.x, plane.position.z).distance_to(zone_center) < zone_radius
+			hud.call("set_plane_hint", over)
 		if k > 0.45 and not reminded_1:
 			reminded_1 = true
 			toast("Zone neeche hai - JUMP dabao!")
@@ -970,8 +1010,10 @@ func _update_sunset() -> void:
 	var k: float = clampf(match_t / 260.0, 0.0, 1.0)
 	sun.rotation.x = lerpf(-0.9, -0.4, k)
 	sun.light_color = Color(1, lerpf(0.96, 0.6, k), lerpf(0.9, 0.35, k))
-	env.background_color = Color(lerpf(0.35, 0.45, k), lerpf(0.55, 0.3, k), lerpf(0.8, 0.35, k))
-	env.ambient_light_energy = lerpf(0.9, 0.55, k)
+	if sky_mat != null:
+		sky_mat.sky_top_color = Color(lerpf(0.25, 0.15, k), lerpf(0.5, 0.2, k), lerpf(0.85, 0.45, k))
+		sky_mat.sky_horizon_color = Color(lerpf(0.7, 0.95, k), lerpf(0.85, 0.5, k), lerpf(0.95, 0.3, k))
+	env.ambient_light_energy = lerpf(0.7, 0.45, k)
 
 
 # ---------- COMBAT HELPERS ----------

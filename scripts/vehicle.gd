@@ -114,8 +114,8 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y = 0.0
 	if driver != null:
-		var throt := -driver.move_input.y
-		var steer := driver.move_input.x
+		var throt: float = -float(driver.move_input.y)
+		var steer: float = float(driver.move_input.x)
 		speed = move_toward(speed, throt * MAX_SPEED, ACCEL * delta * (1.0 if abs(throt) > 0.05 else 3.0))
 		if abs(speed) > 0.5:
 			rotation.y -= steer * TURN * delta * sign(speed)
